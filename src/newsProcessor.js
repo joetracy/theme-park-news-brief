@@ -1,4 +1,5 @@
 const axios = require('axios');
+const cheerio = require('cheerio');
 const Parser = require('rss-parser');
 const NodeCache = require('node-cache');
 const stringSimilarity = require('string-similarity');
@@ -7,72 +8,31 @@ const parser = new Parser();
 const cache = new NodeCache({ stdTTL: 259200 }); // 72 hours
 
 const NEWS_SOURCES = {
-  rssFeeds: [
-    // Official Park Blogs
-    'https://disneyparks.disney.go.com/blog/feed/',
-    'https://blog.universalstudios.com/feed/',
-    'https://seaworldparks.com/en/feed',
-    'https://www.cedarfair.com/news/feed',
-    'https://www.sixflags.com/news/feed',
-    
-    // Major News Outlets
-    'https://news.google.com/rss/search?q=theme+park&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=themed+experience&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=Disney+park&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=Universal+Studios&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=LEGOLAND&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=Six+Flags&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=Cedar+Fair&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=SeaWorld&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=roller+coaster&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=dark+ride&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=Knott%27s+Berry+Farm&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=Dollywood&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=Busch+Gardens&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=teamLab&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=immersive+experience&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=Meow+Wolf&hl=en-US&gl=US&ceid=US:en',
-    'https://news.google.com/rss/search?q=AREA15&hl=en-US&gl=US&ceid=US:en',
-    
-    // News Aggregators
-    'https://news.yahoo.com/rss/entertainment',
-    'https://feeds.aol.com/aol/us/',
-    
-    // Trade Publications
-    'https://www.themeparkmagazine.com/feed/',
-    
-    // Press Release Services
-    'https://www.prnewswire.com/rss/consumer-products-retail-latest-news/consumer-products-retail-latest-news-list.rss',
-    'https://www.businesswire.com/rss/home/20121106006159/en/',
-    
-    // Regional News (Theme Park Heavy Areas)
-    'https://www.orlandosentinel.com/news/tourism/feed/',
-    'https://www.ocregister.com/feed/'
+  // Direct Google News search URLs (these will be scraped)
+  googleNewsSearches: [
+    'https://news.google.com/search?q=theme%20park&hl=en-US&gl=US&ceid=US%3Aen',
+    'https://news.google.com/search?q=disney%20park&hl=en-US&gl=US&ceid=US%3Aen',
+    'https://news.google.com/search?q=universal%20studios&hl=en-US&gl=US&ceid=US%3Aen',
+    'https://news.google.com/search?q=six%20flags&hl=en-US&gl=US&ceid=US%3Aen',
+    'https://news.google.com/search?q=cedar%20fair&hl=en-US&gl=US&ceid=US%3Aen',
+    'https://news.google.com/search?q=seaworld&hl=en-US&gl=US&ceid=US%3Aen',
+    'https://news.google.com/search?q=legoland&hl=en-US&gl=US&ceid=US%3Aen',
+    'https://news.google.com/search?q=roller%20coaster&hl=en-US&gl=US&ceid=US%3Aen',
+    'https://news.google.com/search?q=dark%20ride&hl=en-US&gl=US&ceid=US%3Aen',
+    'https://news.google.com/search?q=themed%20experience&hl=en-US&gl=US&ceid=US%3Aen',
+    'https://news.google.com/search?q=immersive%20experience&hl=en-US&gl=US&ceid=US%3Aen',
+    'https://news.google.com/search?q=teamlab&hl=en-US&gl=US&ceid=US%3Aen',
+    'https://news.google.com/search?q=meow%20wolf&hl=en-US&gl=US&ceid=US%3Aen',
+    'https://news.google.com/search?q=dollywood&hl=en-US&gl=US&ceid=US%3Aen',
+    'https://news.google.com/search?q=busch%20gardens&hl=en-US&gl=US&ceid=US%3Aen'
   ],
   
-  searchTerms: [
-    // Core Terms
-    'theme park', 'themed experience', 'amusement park', 'water park',
-    'dark ride', 'roller coaster', 'thrill ride', 'family ride',
-    'attraction', 'themed attraction', 'interactive attraction',
-    
-    // Major Companies
-    'Disney', 'Universal', 'SeaWorld', 'Six Flags', 'Cedar Fair', 'Merlin',
-    'LEGOLAND', 'Knott\'s Berry Farm', 'Dollywood', 'Busch Gardens',
-    'Hersheypark', 'Silver Dollar City', 'Parques Reunidos',
-    
-    // Themed Experiences
-    'teamLab', 'immersive experience', 'Van Gogh experience', 
-    'Harry Potter experience', 'Meow Wolf', 'AREA15', 'escape room',
-    'interactive experience', 'digital art', 'projection mapping',
-    
-    // Technical Terms
-    'animatronic', 'trackless ride', 'LSM launch', 'coaster',
-    'virtual reality', 'augmented reality', 'motion simulator',
-    
-    // Industry Terms
-    'IAAPA', 'themed entertainment', 'attraction industry',
-    'park operations', 'guest experience', 'queue system'
+  // RSS feeds for official sources
+  rssFeeds: [
+    'https://disneyparks.disney.go.com/blog/feed/',
+    'https://blog.universalstudios.com/feed/',
+    'https://www.themeparkmagazine.com/feed/',
+    'https://www.prnewswire.com/rss/consumer-products-retail-latest-news/consumer-products-retail-latest-news-list.rss'
   ],
   
   blockedDomains: [
@@ -82,7 +42,7 @@ const NEWS_SOURCES = {
 };
 
 async function generateDailyBrief() {
-  console.log('Starting enhanced news discovery...');
+  console.log('Starting comprehensive news discovery...');
   
   try {
     const articles = await discoverArticles();
@@ -98,9 +58,8 @@ async function generateDailyBrief() {
       return new Date(b.publishedAt) - new Date(a.publishedAt);
     });
     
-    // More generous selection
-    const topStories = sorted.slice(0, 8);
-    const alsoNoted = sorted.slice(8, 12);
+    const topStories = sorted.slice(0, 10);
+    const alsoNoted = sorted.slice(10, 15);
     const alerts = sorted.filter(article => article.isAlert);
     
     const summary = await generateSummary(topStories);
@@ -124,18 +83,27 @@ async function generateDailyBrief() {
 async function discoverArticles() {
   const articles = [];
   
-  // Process RSS feeds with more generous limits
+  // Scrape Google News search results directly
+  console.log('Scraping Google News search results...');
+  for (const searchUrl of NEWS_SOURCES.googleNewsSearches) {
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limiting
+      const googleArticles = await scrapeGoogleNews(searchUrl);
+      articles.push(...googleArticles);
+      console.log(`Found ${googleArticles.length} articles from Google News search`);
+    } catch (error) {
+      console.error(`Error scraping Google News search:`, error.message);
+    }
+  }
+  
+  // Process RSS feeds for official sources
+  console.log('Processing official RSS feeds...');
   for (const feedUrl of NEWS_SOURCES.rssFeeds) {
     try {
-      console.log(`Processing RSS feed: ${feedUrl}`);
       const feed = await parser.parseURL(feedUrl);
-      
-      for (const item of feed.items.slice(0, 15)) { // Increased from 10 to 15
+      for (const item of feed.items.slice(0, 10)) {
         if (isRecentArticle(item.pubDate)) {
-          const article = parseRSSItem(item, feedUrl);
-          if (isThemeParkRelated(article)) {
-            articles.push(article);
-          }
+          articles.push(parseRSSItem(item, feedUrl));
         }
       }
     } catch (error) {
@@ -144,6 +112,92 @@ async function discoverArticles() {
   }
   
   console.log(`Total articles discovered: ${articles.length}`);
+  return articles;
+}
+
+async function scrapeGoogleNews(searchUrl) {
+  const articles = [];
+  
+  try {
+    const response = await axios.get(searchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      },
+      timeout: 10000
+    });
+    
+    const $ = cheerio.load(response.data);
+    
+    // Google News uses specific selectors for articles
+    $('article').each((i, element) => {
+      try {
+        const $article = $(element);
+        const $titleLink = $article.find('a[href*="/articles/"]').first();
+        const title = $titleLink.text().trim();
+        const href = $titleLink.attr('href');
+        
+        if (title && href && title.length > 10) {
+          // Extract source and time
+          const source = $article.find('div[data-n-tid]').first().text().trim() || 'Google News';
+          const timeText = $article.find('time').attr('datetime') || new Date().toISOString();
+          
+          const article = {
+            id: generateId(href),
+            title: cleanTitle(title),
+            url: href.startsWith('http') ? href : `https://news.google.com${href}`,
+            source: cleanSource(source),
+            publishedAt: timeText,
+            summary: generateSummaryFromTitle(title),
+            category: categorizeArticle(title, ''),
+            significance: assessSignificance(title, ''),
+            isAlert: isAlertWorthy(title, '')
+          };
+          
+          if (isThemeParkRelated(article) && isRecentArticle(article.publishedAt)) {
+            articles.push(article);
+          }
+        }
+      } catch (err) {
+        // Skip malformed articles
+      }
+    });
+    
+    // Alternative selector for different Google News layouts
+    if (articles.length === 0) {
+      $('h3, h4').each((i, element) => {
+        try {
+          const $headline = $(element);
+          const $link = $headline.find('a').first();
+          const title = $link.text().trim() || $headline.text().trim();
+          const href = $link.attr('href');
+          
+          if (title && title.length > 10) {
+            const article = {
+              id: generateId(title + Date.now()),
+              title: cleanTitle(title),
+              url: href && href.startsWith('http') ? href : `https://news.google.com/search?q=${encodeURIComponent(title)}`,
+              source: 'Google News',
+              publishedAt: new Date().toISOString(),
+              summary: generateSummaryFromTitle(title),
+              category: categorizeArticle(title, ''),
+              significance: assessSignificance(title, ''),
+              isAlert: isAlertWorthy(title, '')
+            };
+            
+            if (isThemeParkRelated(article)) {
+              articles.push(article);
+            }
+          }
+        } catch (err) {
+          // Skip malformed articles
+        }
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error scraping Google News:', error.message);
+  }
+  
   return articles;
 }
 
@@ -161,11 +215,25 @@ function parseRSSItem(item, source) {
   };
 }
 
+function generateSummaryFromTitle(title) {
+  // Create a basic summary from the title for Google News articles
+  if (title.length < 50) {
+    return title + '.';
+  }
+  
+  const words = title.split(' ');
+  if (words.length > 15) {
+    return words.slice(0, 15).join(' ') + '...';
+  }
+  
+  return title;
+}
+
 function isRecentArticle(pubDate) {
-  if (!pubDate) return true; // Include if no date (better safe than sorry)
+  if (!pubDate) return true;
   const articleDate = new Date(pubDate);
   const hoursAgo = (Date.now() - articleDate.getTime()) / (1000 * 60 * 60);
-  return hoursAgo <= 36; // Expanded from 24 to 36 hours
+  return hoursAgo <= 48; // 48 hour window
 }
 
 function isThemeParkRelated(article) {
@@ -175,7 +243,9 @@ function isThemeParkRelated(article) {
     'attraction', 'themed experience', 'seaworld', 'six flags', 'cedar fair',
     'legoland', 'knott', 'dollywood', 'busch gardens', 'dark ride',
     'teamlab', 'immersive', 'meow wolf', 'area15', 'animatronic',
-    'coaster', 'ride', 'park', 'entertainment', 'experience'
+    'coaster', 'ride', 'park', 'entertainment', 'experience', 'hersheypark',
+    'silver dollar city', 'knotts', 'magic kingdom', 'epcot', 'animal kingdom',
+    'hollywood studios', 'disneyland', 'california adventure'
   ];
   return keywords.some(keyword => text.includes(keyword));
 }
@@ -191,26 +261,21 @@ async function filterAndDeduplicate(articles) {
       continue;
     }
     
-    // Check for paywall indicators (less aggressive)
-    if (hasPaywall(article)) {
-      continue;
-    }
-    
     // Check URL deduplication
     const canonicalUrl = canonicalizeUrl(article.url);
     if (seenUrls.has(canonicalUrl)) {
       continue;
     }
     
-    // Check title similarity (less aggressive - was 0.8, now 0.9)
+    // Check title similarity (less aggressive)
     const similarTitle = seenTitles.find(title => 
-      stringSimilarity.compareTwoStrings(title, article.title) > 0.9
+      stringSimilarity.compareTwoStrings(title, article.title) > 0.85
     );
     if (similarTitle) {
       continue;
     }
     
-    // Cache check (72-hour rolling)
+    // Cache check
     const cacheKey = `article_${generateId(canonicalUrl)}`;
     if (cache.has(cacheKey)) {
       continue;
@@ -226,19 +291,9 @@ async function filterAndDeduplicate(articles) {
   return filtered;
 }
 
-function hasPaywall(article) {
-  const indicators = [
-    'subscribe to read', 'premium content', 'member exclusive',
-    'subscription required', 'sign up to continue', 'register to read'
-  ];
-  const text = (article.title + ' ' + article.summary).toLowerCase();
-  return indicators.some(indicator => text.includes(indicator));
-}
-
 function canonicalizeUrl(url) {
   try {
     const urlObj = new URL(url);
-    // Remove UTM parameters and fragments
     urlObj.search = '';
     urlObj.hash = '';
     return urlObj.toString();
@@ -248,7 +303,16 @@ function canonicalizeUrl(url) {
 }
 
 async function generateSummary(topStories) {
+  if (topStories.length === 0) {
+    return "No significant theme park news was discovered in the last 24 hours. Check back tomorrow for the latest updates.";
+  }
+  
   try {
+    // Simplified summary generation
+    const storyTitles = topStories.slice(0, 5).map(story => story.title).join('. ');
+    
+    const prompt = `Write a professional 3-paragraph "Today at a Glance" summary for these theme park news stories. Use 6th grade reading level and journalistic tone: ${storyTitles}`;
+    
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -256,47 +320,58 @@ async function generateSummary(topStories) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 500,
+        max_tokens: 400,
         messages: [
           {
             role: "user",
-            content: `Create a comprehensive "Today at a Glance" summary for these theme park news stories. Write at a 6th grade reading level, use professional journalistic language (avoid promotional words), and create 3-4 well-developed paragraphs that flow smoothly and provide good context.
-
-Stories:
-${topStories.map(story => `• ${story.title}: ${story.summary}`).join('\n')}
-
-Write a cohesive, informative summary that connects these stories naturally and gives readers a complete picture of today's theme park industry developments.`
+            content: prompt
           }
         ]
       })
     });
     
-    const data = await response.json();
-    return data.content[0].text;
+    if (response.ok) {
+      const data = await response.json();
+      return data.content[0].text;
+    } else {
+      throw new Error('API response not ok');
+    }
   } catch (error) {
     console.error('Error generating summary:', error);
-    // Better fallback summary
-    return `Today's theme park industry saw ${topStories.length} significant developments across major operators and attractions. ${topStories.slice(0, 3).map(story => story.summary).join(' ')} These updates reflect ongoing trends in theme park operations, guest experience enhancements, and industry innovation.`;
+    // Fallback summary
+    const topTitles = topStories.slice(0, 3).map(story => story.title).join('. ');
+    return `Today's theme park industry developments include several notable announcements and updates. ${topTitles}. These stories reflect ongoing trends in theme park operations, guest experiences, and industry innovation. More details are available in the full stories below.`;
   }
 }
 
 function cleanTitle(title) {
-  return title.replace(/\s+/g, ' ').replace(/\[.*?\]/g, '').trim();
+  return title.replace(/\s+/g, ' ').replace(/\[.*?\]/g, '').replace(/\|.*$/, '').trim();
 }
 
 function cleanSummary(summary) {
   if (!summary) return 'No summary available.';
-  return summary.replace(/\s+/g, ' ').replace(/<[^>]*>/g, '').trim().substring(0, 300);
+  return summary.replace(/\s+/g, ' ').replace(/<[^>]*>/g, '').trim().substring(0, 250);
+}
+
+function cleanSource(source) {
+  if (!source) return 'News Source';
+  
+  // Clean up common source formats
+  source = source.replace(/\s*-.*$/, ''); // Remove everything after dash
+  source = source.replace(/\.com.*$/, '.com'); // Clean domain suffixes
+  source = source.trim();
+  
+  if (source.length === 0) return 'News Source';
+  return source;
 }
 
 function extractSource(item, fallback) {
   if (item.creator) return item.creator;
   if (item.author) return item.author;
-  if (fallback.includes('google.com')) return 'Google News';
-  if (fallback.includes('yahoo.com')) return 'Yahoo News';
-  if (fallback.includes('aol.com')) return 'AOL News';
-  if (fallback.includes('prnewswire.com')) return 'PR Newswire';
-  if (fallback.includes('businesswire.com')) return 'Business Wire';
+  if (fallback.includes('disneyparks')) return 'Disney Parks Blog';
+  if (fallback.includes('universalstudios')) return 'Universal Studios Blog';
+  if (fallback.includes('themeparkmagazine')) return 'Theme Park Magazine';
+  if (fallback.includes('prnewswire')) return 'PR Newswire';
   return 'News Source';
 }
 
@@ -338,7 +413,7 @@ function isAlertWorthy(title, content) {
 }
 
 function generateId(text) {
-  return Buffer.from(text).toString('base64').substring(0, 16);
+  return Buffer.from(text + Date.now()).toString('base64').substring(0, 16);
 }
 
 module.exports = { generateDailyBrief };
