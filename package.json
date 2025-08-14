@@ -1,0 +1,24 @@
+{
+  "name": "theme-park-news-brief",
+  "version": "1.0.0",
+  "description": "Automated daily theme park news briefing system",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test-email": "node test-email.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "node-cron": "^3.0.2",
+    "axios": "^1.4.0",
+    "cheerio": "^1.0.0-rc.12",
+    "googleapis": "^126.0.1",
+    "rss-parser": "^3.13.0",
+    "node-cache": "^5.1.2",
+    "string-similarity": "^4.0.4",
+    "dotenv": "^16.3.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
